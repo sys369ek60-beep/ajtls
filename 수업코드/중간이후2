@@ -1,0 +1,103 @@
+install.packages("e1071")
+install.packages("caret")
+
+library(e1071)  # SVM 모델
+library(caret)
+# 데이터 불러오기
+df <- read.csv("telecom_churn.csv")
+# 종속변수에 대한 데이터 요소로 변환
+df$Churn <- as.factor(df$Churn)
+#데이터 나누기 학습 80%, 테스트 20%
+trainIndex <- createDataPartition(df$Churn, p = 0.8, list = FALSE) 
+train_data <- df[trainIndex,]
+test_data <- df[-trainIndex,]
+
+cost_value <- 1    
+# Cost(C)
+gamma_value <- 0.1   # Gamma
+# SVM모델 생성
+svm_model <- svm(train_data$Churn ~ ., data = train_data, 
+                 type = 'C-classification',  #Soft margin   
+                 kernel = 'polynomial', #다항커널           
+                 cost = cost_value,
+                 gamma = gamma_value,
+                 probability = TRUE) #확률값으로 도출
+
+summary(svm_model)
+
+#아래6개 시험에 내진 않는다고 함 근데 집에서는 한번 해봐라
+#type = "C-classification", kernel = "linear" # 직선(초평면) 경계, 변수가 많거나 해석이 필요할 때 유리, 계산이 빠름
+#type = "C-classification", kernel = "radial" # 유연한 곡선 경계, 데이터 모양을 모를 때 가장 먼저 쓰는 기본 조합
+#type = "C-classification", kernel = "polynomial" # 다항식 곡선 경계, 변수 간 상호작용(곱)이 중요할 때 유리
+#type = "nu-classification", kernel = "radial" # 마진 오류 비율을 직접 정할 수 있어 값의 의미가 직관적
+#type = "one-classification", kernel = "radial" # 정상 데이터만 학습해 벗어난 값을 이상치로 탐지, 불량·사기처럼 이상 사례가 드물 때 유리
+#type = "one-classification", kernel = "linear" # 직선 경계로 이상치 탐지, 빠르지만 정상 영역이 복잡하면 놓치기 쉬움
+
+
+
+install.packages('pROC')
+library(pROC)
+
+predicted_probs <- predict(svm_model, test_data, probability = TRUE)
+predicted_probs
+
+predicted_probs <- attr(predicted_probs, "probabilities")[, "Yes"] #객체의 속성을 추출하는 함수
+
+predicted_classes <- ifelse(predicted_probs > 0.5, "Yes", "No")
+predicted_classes <- as.factor(predicted_classes)
+predicted_classes
+
+conf_matrix <- confusionMatrix(predicted_classes, test_data$Churn)
+print(conf_matrix)
+
+roc_curve <- roc(test_data$Churn, predicted_probs)
+plot(roc_curve)
+auc(roc_curve)
+
+
+#------------------------------------------
+#아래부터 저번에 한거랑 이번에 한거랑 같이 다시 
+library(caret)
+library(e1071)
+library(pROC)
+
+# 1. 데이터 불러오기 및 전처리
+df <- read.csv("heart.csv", header = TRUE, na = ".")
+df$target <- ifelse(df$target == 1, "yes", "no")
+df$target <- as.factor(df$target)
+
+# 2. 데이터 분할 (8:2)
+set.seed(123)
+trainIndex <- createDataPartition(df$target, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data  <- df[-trainIndex, ]
+
+# 3. 로지스틱 회귀 (예측, 혼동행렬, ROC/AUC)
+logit_model <- glm(target ~ ., data = train_data, family = "binomial")
+logit_probs <- predict(logit_model, newdata = test_data, type = "response")
+
+logit_classes <- factor(ifelse(logit_probs > 0.5, "yes", "no"), levels = levels(test_data$target))
+confusionMatrix(logit_classes, test_data$target, positive = "yes")
+
+roc_logit <- roc(test_data$target, logit_probs)
+plot(roc_logit)
+auc(roc_logit)
+
+# 4. SVM (예측, 혼동행렬, ROC/AUC)
+svm_model <- svm(target ~ ., data = train_data,
+                 type = 'C-classification',
+                 kernel = 'polynomial',
+                 cost = 1,
+                 gamma = 0.1,
+                 probability = TRUE)
+
+svm_pred  <- predict(svm_model, newdata = test_data, probability = TRUE)
+svm_probs <- attr(svm_pred, "probabilities")[, "yes"]
+
+svm_classes <- factor(ifelse(svm_probs > 0.5, "yes", "no"), levels = levels(test_data$target))
+confusionMatrix(svm_classes, test_data$target, positive = "yes")
+
+roc_svm <- roc(test_data$target, svm_probs)
+plot(roc_svm)
+auc(roc_svm)
+
