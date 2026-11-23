@@ -1,0 +1,318 @@
+
+library(skimr)
+library(caret)
+library(e1071)
+library(pROC)
+library(car)
+library(broom)
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+
+df <- read.csv("C:/Users/USER/Documents/pima-indians-diabetes.csv",
+               header = TRUE, na = ".", stringsAsFactors = FALSE)
+
+skim(df)
+
+df$X1 <- ifelse(df$X1 == 1, "yes", "no")
+df$X1 <- factor(df$X1, levels = c("no", "yes"))
+
+trainIndex <- createDataPartition(df$X1, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data <- df[-trainIndex, ]
+
+result1 <- glm(X1 ~ 1, data = train_data, family = "binomial")
+result2 <- glm(X1 ~ ., data = train_data, family = "binomial")
+
+anova(result1, result2, test = "Chisq")
+summary(result2)
+
+tidy_result <- tidy(result2) %>%mutate_if(is.numeric, round, 3)
+
+print(tidy_result)
+
+durbinWatsonTest(result2)
+vif(result2)
+
+cost_value <- 1
+gamma_value <- 0.1
+
+svm_model <- svm(  X1 ~ .,
+                   data = train_data,
+  type = "C-classification",
+  kernel = "polynomial",
+  cost = cost_value,
+  gamma = gamma_value,
+  probability = TRUE
+)
+
+summary(svm_model)
+
+predicted_probs_svm <- predict(
+  svm_model,
+  newdata = test_data,
+  probability = TRUE
+)
+
+predicted_probs_svm <- attr(
+  predicted_probs_svm,
+  "probabilities"
+)[, "yes"]
+
+predicted_classes_svm <- ifelse(
+  predicted_probs_svm > 0.5,
+  "yes",
+  "no"
+)
+
+predicted_classes_svm <- factor(
+  predicted_classes_svm,
+  levels = levels(test_data$X1)
+)
+
+conf_matrix_svm <- confusionMatrix(
+  predicted_classes_svm,
+  test_data$X1,
+  positive = "yes"
+)
+
+print(conf_matrix_svm)
+
+roc_curve_svm <- roc(
+  test_data$X1,
+  predicted_probs_svm,
+  levels = c("no", "yes"),
+  direction = "<"
+)
+
+plot(roc_curve_svm, main = "SVM ROC Curve")
+auc(roc_curve_svm)
+
+skim(df)
+
+train_indices <- createDataPartition(
+  df$X1,
+  p = 0.8,
+  list = FALSE
+)
+
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+control_params <- rpart.control(
+  cp = 0.01,
+  maxdepth = 5,
+  minsplit = 10
+)
+
+tree_model <- rpart(
+  X1 ~ .,
+  data = train_data,
+  method = "class",
+  control = control_params
+)
+
+summary(tree_model)
+
+rpart.plot(tree_model)
+
+predicted_probs_cart <- predict(
+  tree_model,
+  test_data,
+  type = "prob"
+)[, "yes"]
+
+predicted_classes_cart <- ifelse(
+  predicted_probs_cart > 0.5,
+  "yes",
+  "no"
+)
+
+predicted_classes_cart <- factor(
+  predicted_classes_cart,
+  levels = levels(test_data$X1)
+)
+
+confusion_matrix_cart <- confusionMatrix(
+  predicted_classes_cart,
+  test_data$X1,
+  positive = "yes"
+)
+
+print(confusion_matrix_cart)
+
+roc_curve_cart <- roc(
+  test_data$X1,
+  predicted_probs_cart,
+  levels = c("no", "yes"),
+  direction = "<"
+)
+
+plot(roc_curve_cart, main = "CART ROC Curve")
+auc(roc_curve_cart)
+
+33333333333
+
+
+# 필요한 패키지 로드
+library(skimr)
+library(caret)
+library(e1071)
+library(pROC)
+library(car)
+library(broom)
+library(dplyr)
+
+
+df <- read.csv("C:/Users/USER/Documents/pima-indians-diabetes.csv", header = TRUE, na = ".")
+skim(df)
+
+df$X1 <- ifelse(df$X1 == 1, "yes", "no")
+df$X1 <- as.factor(df$X1)
+
+
+trainIndex <- createDataPartition(df$X1, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data  <- df[-trainIndex, ]
+
+#로지스택택
+result1 <- glm(X1 ~ 1, data = train_data, family = "binomial")
+result2 <- glm(X1 ~ ., data = train_data, family = "binomial")
+
+anova(result1, result2, test = "Chisq")
+summary(result2)
+
+# 회귀계수 정리 및 진단 (독립성, 다중공선성)
+tidy_result <- tidy(result2) %>% mutate_if(is.numeric, round, 3)
+print(tidy_result)
+durbinWatsonTest(result2)
+vif(result2)
+
+cost_value  <- 1     # Cost(C)
+gamma_value <- 0.1   # Gamma
+
+svm_model <- svm(X1 ~ ., data = train_data, 
+                 type = 'C-classification',  # Soft margin C-classification
+                 kernel = 'polynomial',      # 다항커널 ('radial' 또는 'linear'로 변경 가능)
+                 
+                 cost = cost_value,
+                 gamma = gamma_value,
+                 probability = TRUE)         # 확률값으로 도출
+
+summary(svm_model)
+
+# SVM 예측 및 평가 (혼동행렬 & ROC/AUC)
+predicted_probs <- predict(svm_model, newdata = test_data, probability = TRUE)
+predicted_probs <- attr(predicted_probs, "probabilities")[, "yes"]
+
+predicted_classes <- ifelse(predicted_probs > 0.5, "yes", "no")
+predicted_classes <- factor(predicted_classes, levels = levels(test_data$X1))
+
+conf_matrix_svm <- confusionMatrix(predicted_classes, test_data$X1, positive = "yes")
+print(conf_matrix_svm)
+
+roc_curve_svm <- roc(test_data$X1, predicted_probs)
+plot(roc_curve_svm, main = "SVM ROC Curve")
+auc(roc_curve_svm)
+
+library(caret)
+library(rpart) #CART모델
+library(rpart.plot)
+library(skimr)
+
+df <- read.csv("C:/Users/USER/Documents/pima-indians-diabetes.csv")
+skim(df)
+df$X1 <- as.factor(df$X1)
+train_indices <- createDataPartition(df$X1, p = 0.8, list = FALSE)
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+#Hyper parameters 설정
+control_params <- rpart.control(cp = 0.01, maxdepth = 5, minsplit = 10) 
+#Complexity Parameter(분할될 때 마다 모델이 최소 1%는 개선이 되어야 함)
+#maxdepth(트리의 깊이가 최대값), minsplit(각각의 노드에 최소 10개의 관측치가 있도록 분할)
+#모델 생성
+tree_model <- rpart(X1 ~ ., data = train_data, method = "class", control = control_params)
+#모델 결과
+summary(tree_model)
+rpart.plot(tree_model)
+predicted_probs <- predict(tree_model, test_data, type = "prob")[,1]
+predicted_probs
+predicted_classes <- ifelse(predicted_probs > 0.5, "A", "B")
+predicted_classes <- as.factor(predicted_classes)
+predicted_classes
+
+library(pROC)
+#Confusion Matrix 도출
+confusion_matrix <- confusionMatrix(predicted_classes, test_data$X1)#---------------------------------------------------
+print(confusion_matrix)
+#ROC Curve
+roc_curve <- roc(test_data$X1, predicted_probs)
+plot(roc_curve)
+auc(roc_curve)
+
+#--------------------
+#----------------------------------실습 
+# 새로운 데이터를 활용한 모델 적용
+df_test <- read.csv("C:/Users/USER/Documents/pima-indians-diabetes.csv", header=TRUE)
+#근데 이 파일에 종속 데이터 Personal Loan이 없어서 안했음
+skim(df_test)
+
+df_test$Personal.Loan <- ifelse(df$X1 == 1, "yes","no")
+df_test$Personal.Loan <- as.factor(df$X1)
+
+df <- select(df, -c("Securities Account", "CD.Account", "Online", "CreditCard"))
+
+trainIndex <- createDataPartition(df$Personal.Loan, p = 0.8, list = FALSE)
+train_data <- df[trainIndex,]
+test_data <- df[-trainIndex,]
+
+
+result1=glm(train_data$Personal.Loan ~1, data= train_data, family = "binomial")
+result2=glm(train_data$Personal.Loan ~., data= train_data, family = "binomial") 
+
+anova(result1, result2, test = "Chisq")
+
+summary(result2)
+
+tidy_result <- tidy(result2)
+tidy_result <- mutate_if(tidy_result, is.numeric, round, 3)
+
+print(tidy_result)
+
+#독립성 검정
+durbinWatsonTest(result2)
+# 다중공선성(변수의 중복성) 
+vif(result2)
+# 다중공선성 위배 변수제거 후 다시 분석
+result=glm(train_data$Personal.Loan ~., data= train_data, family = "binomial") 
+# Cook's distance 계산 (glm에도 사용 가능)
+influencePlot(result, id.method="identify")
+
+#----------------------영향없는거 제거후 다시 
+df <- select(df, -c("ID", "Age", "Experience", "ZIP.Code", "Mortgage"))
+
+trainIndex <- createDataPartition(df$Personal.Loan, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data  <- df[-trainIndex, ]
+
+result1_new = glm(Personal.Loan ~ 1, data = train_data, family = "binomial")
+result2_new = glm(Personal.Loan ~ ., data = train_data, family = "binomial") 
+
+anova(result1_new, result2_new, test = "Chisq")
+
+summary(result2_new)
+
+tidy_result_new <- tidy(result2_new)
+tidy_result_new <- mutate_if(tidy_result_new, is.numeric, round, 3)
+
+print(tidy_result_new)
+
+#독립성 검정
+durbinWatsonTest(result2)
+# 다중공선성(변수의 중복성) 
+vif(result2)
+# 다중공선성 위배 변수제거 후 다시 분석
+result=glm(train_data$Personal.Loan ~., data= train_data, family = "binomial") 
+# Cook's distance 계산 (glm에도 사용 가능)
+influencePlot(result, id.method="identify")
