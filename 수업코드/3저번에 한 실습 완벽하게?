@@ -1,0 +1,81 @@
+# 필요한 패키지 로드
+library(skimr)
+library(caret)
+library(e1071)
+library(pROC)
+library(car)
+library(broom)
+library(dplyr)
+
+# 1. 데이터 불러오기 및 전처리
+df <- read.csv("heart.csv", header = TRUE, na = ".")
+skim(df)
+
+df$target <- ifelse(df$target == 1, "yes", "no")
+df$target <- as.factor(df$target)
+
+# 2. 데이터 분할 (학습 80%, 테스트 20%)
+set.seed(123)
+trainIndex <- createDataPartition(df$target, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data  <- df[-trainIndex, ]
+
+
+# ==============================================================================
+# [모델 1] 로지스틱 회귀분석 (Logistic Regression)
+# ==============================================================================
+result1 <- glm(target ~ 1, data = train_data, family = "binomial")
+result2 <- glm(target ~ ., data = train_data, family = "binomial")
+
+anova(result1, result2, test = "Chisq")
+summary(result2)
+
+# 회귀계수 정리 및 진단 (독립성, 다중공선성)
+tidy_result <- tidy(result2) %>% mutate_if(is.numeric, round, 3)
+print(tidy_result)
+durbinWatsonTest(result2)
+vif(result2)
+
+# 로지스틱 회귀 예측 및 평가 (혼동행렬 & ROC/AUC)
+logit_probs <- predict(result2, newdata = test_data, type = "response")
+
+logit_classes <- ifelse(logit_probs > 0.5, "yes", "no")
+logit_classes <- factor(logit_classes, levels = levels(test_data$target))
+
+conf_matrix_logit <- confusionMatrix(logit_classes, test_data$target, positive = "yes")
+print(conf_matrix_logit)
+
+roc_curve_logit <- roc(test_data$target, logit_probs)
+plot(roc_curve_logit, main = "Logistic Regression ROC Curve")
+auc(roc_curve_logit)
+
+
+# ==============================================================================
+# [모델 2] SVM (Support Vector Machine)
+# ==============================================================================
+cost_value  <- 1     # Cost(C)
+gamma_value <- 0.1   # Gamma
+
+svm_model <- svm(target ~ ., data = train_data, 
+                 type = 'C-classification',  # Soft margin C-classification
+                 kernel = 'polynomial',      # 다항커널 ('radial' 또는 'linear'로 변경 가능)
+                 # nu = 0.1,                 # type을 'nu-classification'으로 사용할 때 활성화
+                 cost = cost_value,
+                 gamma = gamma_value,
+                 probability = TRUE)         # 확률값으로 도출
+
+summary(svm_model)
+
+# SVM 예측 및 평가 (혼동행렬 & ROC/AUC)
+predicted_probs <- predict(svm_model, newdata = test_data, probability = TRUE)
+predicted_probs <- attr(predicted_probs, "probabilities")[, "yes"]
+
+predicted_classes <- ifelse(predicted_probs > 0.5, "yes", "no")
+predicted_classes <- factor(predicted_classes, levels = levels(test_data$target))
+
+conf_matrix_svm <- confusionMatrix(predicted_classes, test_data$target, positive = "yes")
+print(conf_matrix_svm)
+
+roc_curve_svm <- roc(test_data$target, predicted_probs)
+plot(roc_curve_svm, main = "SVM ROC Curve")
+auc(roc_curve_svm)
